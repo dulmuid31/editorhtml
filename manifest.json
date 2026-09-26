@@ -1,0 +1,16 @@
+{
+  "name": "Offline HTML Builder PWA",
+  "short_name": "HTML Builder",
+  "description": "Aplikasi Pembuat & Editor HTML Offline yang Mampu Menampung Ribuan Baris Kode",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#252526",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%23252526'/><path d='M100 80h312v352H100z' fill='%231e1e1e'/><text x='130' y='260' fill='%230e639c' font-family='monospace' font-weight='bold' font-size='110'>&lt;HTML&gt;</text></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
