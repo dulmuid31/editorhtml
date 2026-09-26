@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline HTML Builder</title>
+  <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22HTML%20Builder%20PWA%22%2C%22short_name%22%3A%22HTMLBuilder%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231e1e1e%22%2C%22theme_color%22%3A%22%23252526%22%7D">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #1e1e1e; color: #fff; }
+    header { background: #252526; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #3c3c3c; flex-wrap: wrap; gap: 8px; }
+    .file-info { display: flex; align-items: center; gap: 8px; }
+    h1 { font-size: 15px; font-weight: 600; color: #cccccc; }
+    #fileNameDisplay { font-size: 13px; color: #4ec9b0; font-family: monospace; background: #1e1e1e; padding: 3px 8px; border-radius: 4px; border: 1px solid #3c3c3c; }
+    .btn-group { display: flex; gap: 8px; }
+    button { background: #0e639c; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #1177bb; }
+    button.secondary { background: #3c3c3c; }
+    button.secondary:hover { background: #505050; }
+    
+    .container { display: flex; flex: 1; overflow: hidden; }
+    .editor-container, .preview-container { width: 50%; height: 100%; display: flex; flex-direction: column; }
+    .editor-container { border-right: 1px solid #3c3c3c; }
+    .panel-header { background: #2d2d2d; padding: 6px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #9cdcfe; border-bottom: 1px solid #3c3c3c; display: flex; justify-content: space-between; align-items: center; }
+    .stats { color: #858585; font-size: 11px; }
+
+    /* Area Editor */
+    .editor-wrapper { flex: 1; display: flex; background: #1e1e1e; overflow: hidden; position: relative; }
+    .line-numbers { width: 48px; background: #1e1e1e; color: #858585; padding: 12px 0; font-family: "Consolas", "Courier New", monospace; font-size: 13px; line-height: 1.5; text-align: right; padding-right: 10px; user-select: none; border-right: 1px solid #2d2d2d; overflow: hidden; }
+    
+    .code-box { flex: 1; position: relative; height: 100%; }
+    
+    textarea, .highlight-layer {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      padding: 12px; font-family: "Consolas", "Courier New", monospace;
+      font-size: 13px; line-height: 1.5; tab-size: 2; white-space: pre;
+      overflow: auto; margin: 0; border: none; outline: none; box-sizing: border-box;
+      word-wrap: normal;
+    }
+
+    /* Textarea untuk mengetik */
+    textarea {
+      z-index: 2; background: transparent; color: transparent; caret-color: #ffffff;
+      resize: none; spellcheck: false;
+    }
+
+    /* Layer Pewarnaan */
+    .highlight-layer {
+      z-index: 1; background: #1e1e1e; pointer-events: none; color: #d4d4d4;
+    }
+
+    iframe { flex: 1; background: #ffffff; border: none; width: 100%; height: 100%; }
+
+    /* Token Syntax Highlighting (VS Code Dark Theme) */
+    .tag { color: #569cd6; font-weight: bold; }
+    .attr { color: #9cdcfe; }
+    .str { color: #ce9178; }
+    .comm { color: #6a9955; font-style: italic; }
+    .doctype { color: #569cd6; }
+
+    @media (max-width: 768px) {
+      .container { flex-direction: column; }
+      .editor-container, .preview-container { width: 100%; height: 50%; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="file-info">
+      <h1>HTML Builder</h1>
+      <span id="fileNameDisplay">index.html</span>
+    </div>
+    <div class="btn-group">
+      <button class="secondary" onclick="newFile()">+ File Baru</button>
+      <button class="secondary" onclick="loadFromFile()">Buka File</button>
+      <button onclick="downloadHTML()">Simpan File</button>
+      <input type="file" id="fileInput" accept=".html,.txt" style="display: none;" onchange="readSingleFile(event)">
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="editor-container">
+      <div class="panel-header">
+        <span>Editor Kode</span>
+        <span class="stats" id="statsDisplay">0 Baris | 0 Spasi</span>
+      </div>
+      <div class="editor-wrapper">
+        <div class="line-numbers" id="lineNumbers">1</div>
+        <div class="code-box">
+          <textarea id="code" spellcheck="false" placeholder="Tulis kode HTML di sini..."></textarea>
+          <div class="highlight-layer" id="highlightLayer"></div>
+        </div>
+      </div>
+    </div>
+    <div class="preview-container">
+      <div class="panel-header">Live Preview</div>
+      <iframe id="preview"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const codeArea = document.getElementById('code');
+    const highlightLayer = document.getElementById('highlightLayer');
+    const lineNumbers = document.getElementById('lineNumbers');
+    const preview = document.getElementById('preview');
+    const statsDisplay = document.getElementById('statsDisplay');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+    let currentFileName = localStorage.getItem('pwa_html_filename') || 'index.html';
+    fileNameDisplay.textContent = currentFileName;
+
+    const defaultCode = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f4f4f9; color: #333; }
+    h1 { color: #0e639c; }
+  </style>
+</head>
+<body>
+  <h1>Halo World!</h1>
+  <p>Silakan mulai mengetik atau menempelkan kode HTML di sini.</p>
+</body>
+</html>`;
+
+    const savedCode = localStorage.getItem('pwa_html_editor_code');
+    codeArea.value = savedCode !== null ? savedCode : defaultCode;
+
+    // Fungsi Parser Syntax Highlighting Ringan & Cepat (Tanpa Library Luar)
+    function highlightHTML(src) {
+      // Escape HTML entities
+      let text = src
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // RegEx Pewarnaan
+      return text
+        .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="comm">$1</span>') // Komentar
+        .replace(/(&lt;!DOCTYPE[\s\S]*?&gt;)/gi, '<span class="doctype">$1</span>') // Doctype
+        .replace(/(&lt;\/?[a-z0-9]+)/gi, '<span class="tag">$1</span>') // Tag pembuka/penutup
+        .replace(/(&gt;)/g, '<span class="tag">$1</span>')
+        .replace(/([a-z-]+)=/gi, '<span class="attr">$1</span>=') // Atribut
+        .replace(/("[^"]*"|'[^']*')/g, '<span class="str">$1</span>'); // String
+    }
+
+    // Synchronize Scroll
+    codeArea.addEventListener('scroll', () => {
+      highlightLayer.scrollTop = codeArea.scrollTop;
+      highlightLayer.scrollLeft = codeArea.scrollLeft;
+      lineNumbers.scrollTop = codeArea.scrollTop;
+    });
+
+    // Update Editor State
+    function render() {
+      const val = codeArea.value;
+
+      // Render Warna
+      highlightLayer.innerHTML = highlightHTML(val) + (val.endsWith('\n') ? '<br>' : '');
+
+      // Render Preview
+      const previewDoc = preview.contentDocument || preview.contentWindow.document;
+      previewDoc.open();
+      previewDoc.write(val);
+      previewDoc.close();
+
+      // Render Line Numbers
+      const lines = val.split('\n').length;
+      let lineStr = '';
+      for (let i = 1; i <= lines; i++) {
+        lineStr += i + '<br>';
+      }
+      lineNumbers.innerHTML = lineStr;
+
+      // Stats
+      const spaces = (val.match(/ /g) || []).length;
+      statsDisplay.textContent = `${lines.toLocaleString('id-ID')} Baris | ${spaces.toLocaleString('id-ID')} Spasi`;
+
+      // Auto-save
+      localStorage.setItem('pwa_html_editor_code', val);
+      localStorage.setItem('pwa_html_filename', currentFileName);
+    }
+
+    let timer;
+    codeArea.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(render, 50); // Fast 50ms render
+    });
+
+    // Indentasi Tab
+    codeArea.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = codeArea.selectionStart;
+        const end = codeArea.selectionEnd;
+        codeArea.value = codeArea.value.substring(0, start) + '  ' + codeArea.value.substring(end);
+        codeArea.selectionStart = codeArea.selectionEnd = start + 2;
+        render();
+      }
+    });
+
+    // File Actions
+    function newFile() {
+      const name = prompt('Masukkan nama file baru:', 'untitled.html');
+      if (name) {
+        currentFileName = name.endsWith('.html') ? name : name + '.html';
+        fileNameDisplay.textContent = currentFileName;
+        codeArea.value = defaultCode;
+        render();
+      }
+    }
+
+    function downloadHTML() {
+      const blob = new Blob([codeArea.value], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = currentFileName;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function loadFromFile() {
+      document.getElementById('fileInput').click();
+    }
+
+    function readSingleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      currentFileName = file.name;
+      fileNameDisplay.textContent = currentFileName;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        codeArea.value = e.target.result;
+        render();
+      };
+      reader.readAsText(file);
+    }
+
+    // Init
+    render();
+
+    // PWA ServiceWorker
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', e => e.waitUntil(caches.open('v4').then(c => c.addAll(['./']))));
+        self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+    }
+  </script>
+</body>
+</html>
+
