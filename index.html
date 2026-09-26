@@ -1,3 +1,82 @@
+Berikut adalah struktur file PWA terlengkap yang terdiri dari manifest.json, sw.js (Service Worker), dan index.html.
+Ketiga file ini saling terhubung sehingga aplikasi dapat diinstal di Android, iOS, Windows, atau macOS dan berjalan 100% offline tanpa koneksi internet.
+1. manifest.json
+Simpan kode berikut dalam file bernama manifest.json:
+{
+  "name": "Offline HTML Builder PWA",
+  "short_name": "HTML Builder",
+  "description": "Aplikasi Pembuat & Editor HTML Offline yang Mampu Menampung Ribuan Baris Kode",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#252526",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%23252526'/><path d='M100 80h312v352H100z' fill='%231e1e1e'/><text x='130' y='260' fill='%230e639c' font-family='monospace' font-weight='bold' font-size='110'>&lt;HTML&gt;</text></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
+
+2. sw.js (Service Worker)
+Simpan kode berikut dalam file bernama sw.js:
+const CACHE_NAME = 'html-builder-v1';
+const ASSETS_TO_CACHE = [
+  './',
+  './index.html',
+  './manifest.json'
+];
+
+// Install Event
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE);
+    }).then(() => self.skipWaiting())
+  );
+});
+
+// Activate Event
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            return caches.delete(cache);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch Event - Mengambil aset dari cache jika offline
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(event.request).then((response) => {
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+        return response;
+      });
+    }).catch(() => {
+      return caches.match('./index.html');
+    })
+  );
+});
+
+3. Full index.html
+Simpan kode berikut dalam file bernama index.html:
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -203,12 +282,12 @@
 
     // Registrasi Service Worker PWA
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('SW Registered!', reg))
-          .catch(err => console.error('SW Registration Failed!', err));
-      });
-    }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then((reg) => console.log('Service Worker berhasil didaftarkan:', reg))
+      .catch((err) => console.error('Registrasi Service Worker gagal:', err));
+  });
+}
   </script>
 </body>
 </html>
