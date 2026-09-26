@@ -5,7 +5,7 @@ const ASSETS_TO_CACHE = [
   './manifest.json'
 ];
 
-// Install Event
+// Install Event: Menyimpan file-file inti ke dalam cache
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -14,7 +14,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event
+// Activate Event: Membersihkan cache lama jika ada pembaruan
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -29,7 +29,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Mengambil aset dari cache jika offline
+// Fetch Event: Mengambil dari cache saat offline, atau dari jaringan jika online
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
